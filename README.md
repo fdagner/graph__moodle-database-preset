@@ -42,13 +42,13 @@ Länder: '[[state]]',
 ```
 <b>Important: The main category must be named 'name'.</b>
 
+You can also do it this way:
 ```
 {
 name: '[[name]] ##edit## ##delete##',
 Länder: '[[state]]',
 },
 ```
-You can also do it this way.
 
 ## Language Support
 
