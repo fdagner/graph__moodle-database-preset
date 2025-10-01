@@ -12,7 +12,7 @@ In this example, students have entered the countries they have visited.
 - There is only one database field in this example, so only one category exists.  
 - The larger the bubble, the more frequently the country is mentioned.  
 
-<b>IMportant: It is possible to create many database fields and use them as categories.</b>
+<b>Important: It is possible to create many database fields and use them as categories.</b>
 
 ![Country detail view](./screenshots/listenansicht2.png)
 Click on a country to see which students have visited it.
@@ -44,7 +44,7 @@ Länder: '[[state]]',
 
 ```
 {
-name: '[[nickname]] ##edit## ##delete##',
+name: '[[name]] ##edit## ##delete##',
 Länder: '[[state]]',
 },
 ```
