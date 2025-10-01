@@ -18,7 +18,7 @@ In this example, students have entered the countries they have visited.
 Click on a country to see which students have visited it.
 
 ![Student detail view](./screenshots/listenansicht3.png)
-Click on a student to see all other students with the same name.  
+Click on a student to see other students.  
 You can then view:  
 - The countries the student has visited  
 - Who else has visited these countries
