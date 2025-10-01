@@ -1,4 +1,4 @@
-# Feedback Targeting
+# Graph
 
 Graph is a preset for the Moodle activity database.
 
@@ -6,14 +6,20 @@ Graph is a preset for the Moodle activity database.
 
 Representations of relationships in a graph.
 
-<img width="400" alt="list view" src="/screenshots/listenansicht.png">
-In this example, the students have entered the countries they have visited. The entries must be separated by commas. There is only one database field, so there is only one category. The larger the bubbles, the more frequently the country is mentioned. 
+![List view of countries visited](./screenshots/listenansicht.png)
+In this example, students have entered the countries they have visited.  
+- Entries must be separated by commas.  
+- There is only one database field, so only one category exists.  
+- The larger the bubble, the more frequently the country is mentioned.  
 
-<img width="400" alt="list view" src="/screenshots/listenansicht2.png">
-If you click on a country, you can see who has visited it.
+![Country detail view](./screenshots/listenansicht2.png)
+Click on a country to see which students have visited it.
 
-<img width="400" alt="list view" src="/screenshots/listenansicht3.png">
-Click on a student to see all other students with the same name. You can then view the countries the student has visited and who else has visited them.
+![Student detail view](./screenshots/listenansicht3.png)
+Click on a student to see all other students with the same name.  
+You can then view:  
+- The countries the student has visited  
+- Who else has visited these countries
 
 ## Getting started
 
