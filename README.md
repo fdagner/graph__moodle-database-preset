@@ -9,8 +9,10 @@ Representations of relationships in a graph.
 ![List view of countries visited](./screenshots/listenansicht.png)
 In this example, students have entered the countries they have visited.  
 - Entries must be separated by commas.  
-- There is only one database field, so only one category exists.  
+- There is only one database field in this example, so only one category exists.  
 - The larger the bubble, the more frequently the country is mentioned.  
+
+<b>IMportant: It is possible to create many database fields and use them as categories.</b>
 
 ![Country detail view](./screenshots/listenansicht2.png)
 Click on a country to see which students have visited it.
