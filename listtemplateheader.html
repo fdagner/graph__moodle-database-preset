@@ -1,0 +1,36 @@
+<script>
+    // Run once per session.
+    if ((typeof sessionStorage !== 'undefined') &&
+        (sessionStorage.getItem('ChangeEntriesReload') === null)) {
+
+        // Set url for 1000 entries per site.
+        const params = new URLSearchParams(location.search);
+        params.set('perpage', 1000);
+        window.history.replaceState({}, '', `${location.pathname}?${params}`);
+        // Reload page.
+        window.location.reload();
+
+        console.log('ok');
+
+        sessionStorage.setItem('ChangeEntriesReload', true);
+    }
+</script>
+<div  id="fullscreen_graph" style="aspect-ratio: 4/3;"><h2 class="graph-title">Graph</h2>
+ <div class="graph-filter"> <button type="button" class="btn btn-light toggle-fullscreen-btn" onclick="togglePresentationMode()" title="Präsentationsmodus"><i
+                        class="fa-solid fa-person-chalkboard"></i></button>
+  <select id="filter">
+    <option value="alle">Alle</option>
+  </select>
+
+</div> 
+
+<div class="graph-container" style="overflow: auto;min-width: 800px">
+  <canvas id="graph"></canvas>
+</div>
+<details><summary>Einträge</summary>
+<div id="list_names"></div>
+</details>
+</div>
+
+<script>
+const schueler = [

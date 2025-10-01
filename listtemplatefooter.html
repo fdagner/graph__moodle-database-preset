@@ -1,0 +1,559 @@
+];
+// ---------------- Canvas Setup ----------------
+const canvas = document.getElementById("graph");
+const ctx = canvas.getContext("2d");
+const radius = 10;
+const minCategoryRadius = 5;
+const maxCategoryRadius = 30;
+
+// ---------------- Globale Variablen ----------------
+let categoryNodes = [];
+let currentFilter = "alle";
+let selectedCategoryNode = null;
+let selectedSchuelerNode = null;
+let draggedNode = null;
+let dragMoved = false;
+
+// ---------------- Resize ----------------
+function resizeCanvas() {
+  const container = canvas.parentElement;
+  const rect = container.getBoundingClientRect();
+  canvas.width = Math.max(rect.width || 800, 800);
+  canvas.height = Math.max(rect.height || 600, 600);
+  clusterPositions();
+  draw();
+}
+
+window.addEventListener("load", resizeCanvas);
+window.addEventListener("resize", resizeCanvas);
+
+function togglePresentationMode() {
+  const fsContainer = document.getElementById("fullscreen_graph");
+  if (fsContainer.classList.contains('fullscreen-mode')) {
+    fsContainer.classList.remove('fullscreen-mode');
+    location.reload();
+  } else {
+    fsContainer.classList.add('fullscreen-mode');
+    requestAnimationFrame(resizeCanvas);
+  }
+}
+
+// ---------------- Kategorien & Filter ----------------
+const excludedKeys = ["name", "x", "y", "vx", "vy", "type"];
+const categories = Object.keys(schueler[0]).filter(k => !excludedKeys.includes(k));
+
+const filterSelect = document.getElementById("filter");
+filterSelect.innerHTML = '<option value="alle">Alle</option>';
+categories.forEach(cat => {
+  const opt = document.createElement("option");
+  opt.value = cat;
+  opt.textContent = cat.charAt(0).toUpperCase() + cat.slice(1);
+  filterSelect.appendChild(opt);
+});
+
+// ---------------- Schüler-Positionen ----------------
+if (categoryNodes.length === 0) {
+  schueler.forEach(s => {
+    s.x = canvas.width / 2 + (Math.random() - 0.5) * 200;
+    s.y = canvas.height / 2 + (Math.random() - 0.5) * 200;
+    s.vx = 0;
+    s.vy = 0;
+    s.type = "schueler";
+  });
+}
+
+// ---------------- Kategorie-Knoten erstellen ----------------
+function createCategoryNodes(kategorie) {
+  if (!schueler || schueler.length === 0) return [];
+
+  let allValues = [];
+  if (kategorie === "alle") {
+    allValues = categories.flatMap(cat =>
+      schueler.flatMap(s =>
+        (s[cat] || "").split(',').map(v => v.trim()).filter(v => v)
+          .map(v => ({ value: v, category: cat }))
+      )
+    );
+    allValues = [...new Map(allValues.map(item => [`${item.value}-${item.category}`, item])).values()];
+  } else {
+    allValues = schueler.flatMap(s =>
+      (s[kategorie] || "").split(',').map(v => v.trim()).filter(v => v)
+        .map(v => ({ value: v, category: kategorie }))
+    );
+    allValues = [...new Map(allValues.map(item => [`${item.value}`, item])).values()];
+  }
+
+  const centerX = canvas.width / 2;
+  const centerY = canvas.height / 2;
+  const radius = Math.min(canvas.width, canvas.height) / 3;
+
+  const newNodes = allValues.map((item, index) => {
+    let existingNode = categoryNodes.find(
+      n => n.name === item.value && n.category === item.category
+    );
+    if (!existingNode) {
+      const angle = (2 * Math.PI * index) / allValues.length;
+      return {
+        name: item.value,
+        x: centerX + Math.cos(angle) * radius,
+        y: centerY + Math.sin(angle) * radius,
+        vx: 0,
+        vy: 0,
+        type: "category",
+        category: item.category,
+        initialized: false
+      };
+    }
+    return existingNode;
+  });
+
+  return newNodes;
+}
+
+// ---------------- Kanten erstellen ----------------
+function createEdges(kategorie, allNodes) {
+  let edges = [];
+  if (!schueler || schueler.length === 0 || !categoryNodes || categoryNodes.length === 0) {
+    console.warn(`Cannot create edges: schueler=${schueler?.length || 0}, categoryNodes=${categoryNodes?.length || 0}`);
+    return edges;
+  }
+  schueler.forEach((s, i) => {
+    const relevantCategories = kategorie === "alle" ? categories : [kategorie];
+    relevantCategories.forEach(cat => {
+      const schuelerValues = (s[cat] || "").split(',').map(v => v.trim()).filter(v => v);
+      categoryNodes.forEach((c, j) => {
+        if (c.category === cat && schuelerValues.includes(c.name)) {
+          const toIndex = j + schueler.length;
+          if (toIndex < allNodes.length) {
+            edges.push({ from: i, to: toIndex, type: "schueler-category" });
+          } else {
+            console.warn(`Invalid edge: toIndex ${toIndex} exceeds allNodes length ${allNodes.length}`);
+          }
+        }
+      });
+    });
+  });
+  return edges;
+}
+
+// ---------------- Physik-Parameter ----------------
+function getDynamicPhysicsParameters(numNodes, canvasWidth, canvasHeight) {
+  const referenceNodes = 50;
+  const canvasArea = canvasWidth * canvasHeight;
+  const referenceArea = 800 * 600;
+  const areaScale = Math.sqrt(canvasArea / referenceArea);
+  const nodeScale = Math.sqrt(numNodes / referenceNodes);
+
+  return {
+    springLength: 150 * areaScale * (nodeScale > 1 ? Math.min(nodeScale, 1.5) : 1),
+    springStrength: 0.005 / (nodeScale > 1 ? nodeScale : 1),
+    repulsion: 50 * nodeScale * areaScale,
+    damping: Math.min(0.7 + 0.1 * (nodeScale - 1), 0.9)
+  };
+}
+
+// ---------------- Kräfte anwenden ----------------
+function applyForces(nodes) {
+  const { springLength, springStrength, repulsion, damping } = getDynamicPhysicsParameters(
+    nodes.length,
+    canvas.width,
+    canvas.height
+  );
+
+  for (let i = 0; i < nodes.length; i++) {
+    for (let j = i + 1; j < nodes.length; j++) {
+      let dx = nodes[j].x - nodes[i].x;
+      let dy = nodes[j].y - nodes[i].y;
+      let dist = Math.sqrt(dx * dx + dy * dy) || 0.01;
+      let force = repulsion / (dist * dist);
+      let fx = force * dx / dist;
+      let fy = force * dy / dist;
+      nodes[i].vx -= fx;
+      nodes[i].vy -= fy;
+      nodes[j].vx += fx;
+      nodes[j].vy += fy;
+    }
+  }
+
+  const edges = createEdges(currentFilter, nodes);
+  edges.forEach(e => {
+    let a = nodes[e.from];
+    let b = nodes[e.to];
+    if (!a || !b) {
+      console.warn(`Invalid edge: from=${e.from}, to=${e.to}, nodes length=${nodes.length}`);
+      return;
+    }
+    let dx = b.x - a.x;
+    let dy = b.y - a.y;
+    let dist = Math.sqrt(dx * dx + dy * dy) || 0.01;
+    let delta = dist - springLength;
+    let fx = springStrength * delta * dx / dist;
+    let fy = springStrength * delta * dy / dist;
+    a.vx += fx;
+    a.vy += fy;
+    b.vx -= fx;
+    b.vy -= fy;
+  });
+
+  nodes.forEach(s => {
+    s.vx *= damping;
+    s.vy *= damping;
+    s.x += s.vx;
+    s.y += s.vy;
+
+    const nodeRadius = s.type === "category" ? s.radius : radius;
+    if (s.x < nodeRadius) { s.x = nodeRadius; s.vx = 0; }
+    if (s.x > canvas.width - nodeRadius) { s.x = canvas.width - nodeRadius; s.vx = 0; }
+    if (s.y < nodeRadius) { s.y = nodeRadius; s.vy = 0; }
+    if (s.y > canvas.height - nodeRadius) { s.y = canvas.height - nodeRadius; s.vy = 0; }
+    if (Math.abs(s.vx) < 0.01) s.vx = 0;
+    if (Math.abs(s.vy) < 0.01) s.vy = 0;
+  });
+}
+
+// ---------------- Zeichnen ----------------
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  const allNodes = [...schueler, ...categoryNodes];
+  const edges = createEdges(currentFilter, allNodes);
+
+  // Bestimme die relevanten Kategorien für den ausgewählten Schüler
+  let relevantCategories = [];
+  if (selectedSchuelerNode) {
+    relevantCategories = edges
+      .filter(e => allNodes[e.from] === selectedSchuelerNode || allNodes[e.to] === selectedSchuelerNode)
+      .map(e => allNodes[e.to].type === "category" ? allNodes[e.to] : allNodes[e.from])
+      .filter(cat => cat.type === "category");
+  }
+
+  // Zeichne Kanten
+  edges.forEach(e => {
+    const from = allNodes[e.from];
+    const to = allNodes[e.to];
+    if (!from || !to) return;
+
+    let isHighlighted = false;
+    let strokeColor = (selectedCategoryNode || selectedSchuelerNode) ? "rgba(170,170,170,0.3)" : "#aaa";
+    let lineWidth = 1;
+
+    if (selectedCategoryNode) {
+      if (to === selectedCategoryNode || from === selectedCategoryNode) {
+        isHighlighted = true;
+        strokeColor = "purple";
+        lineWidth = 2;
+      }
+    }
+    if (selectedSchuelerNode) {
+      if (relevantCategories.includes(to) || relevantCategories.includes(from)) {
+        isHighlighted = true;
+        strokeColor = "purple";
+        lineWidth = 2;
+      }
+    }
+
+    ctx.strokeStyle = strokeColor;
+    ctx.lineWidth = lineWidth;
+    ctx.beginPath();
+    ctx.moveTo(from.x, from.y);
+    ctx.lineTo(to.x, to.y);
+    ctx.stroke();
+  });
+
+  // Zeichne Knoten
+  allNodes.forEach(s => {
+    let isHighlighted = false;
+    let strokeColor = (selectedCategoryNode || selectedSchuelerNode) ? "rgba(51,51,51,0.3)" : "#333";
+
+    if (selectedCategoryNode) {
+      if (s === selectedCategoryNode) {
+        isHighlighted = true;
+        strokeColor = "purple";
+      }
+      if (s.type === "schueler") {
+        const connected = edges.some(e =>
+          (allNodes[e.from] === s && allNodes[e.to] === selectedCategoryNode) ||
+          (allNodes[e.to] === s && allNodes[e.from] === selectedCategoryNode)
+        );
+        if (connected) {
+          isHighlighted = true;
+          strokeColor = "purple";
+        }
+      }
+    }
+    if (selectedSchuelerNode) {
+      if (s === selectedSchuelerNode || relevantCategories.includes(s)) {
+        isHighlighted = true;
+        strokeColor = "black";
+      }
+      if (s.type === "schueler" && s !== selectedSchuelerNode) {
+        const connected = relevantCategories.some(cat =>
+          edges.some(e =>
+            (allNodes[e.from] === s && allNodes[e.to] === cat) ||
+            (allNodes[e.to] === s && allNodes[e.from] === cat)
+          )
+        );
+        if (connected) {
+          isHighlighted = true;
+          strokeColor = "purple";
+        }
+      }
+    }
+
+    ctx.beginPath();
+    const nodeRadius = s.type === "category" ? s.radius : radius;
+    ctx.arc(s.x, s.y, nodeRadius, 0, 2 * Math.PI);
+
+    ctx.fillStyle = isHighlighted
+      ? (s.type === "category" ? "#e0b3ff" : "#c080ff")
+      : (selectedCategoryNode || selectedSchuelerNode)
+        ? "rgba(200,200,200,0.1)"
+        : (s.type === "category" ? "#fff" : "#666");
+    ctx.fill();
+
+    ctx.strokeStyle = strokeColor;
+    ctx.lineWidth = isHighlighted ? 2 : 1;
+    ctx.stroke();
+
+    ctx.fillStyle = isHighlighted ? "#000" : (selectedCategoryNode || selectedSchuelerNode) ? "rgba(0,0,0,0.1)" : "#000";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "top";
+    ctx.font = s.type === "category" ? "16px sans-serif" : "14px sans-serif";
+    const offsetY = nodeRadius + (s.type === "category" ? 6 : 4);
+    ctx.fillText(s.name.replace(/<[^>]*>/g, ""), s.x, s.y + offsetY);
+  });
+}
+
+// ---------------- Cluster-Positionen ----------------
+function clusterPositions() {
+  categoryNodes = createCategoryNodes(currentFilter);
+
+  const groups = {};
+  schueler.forEach(s => {
+    categories.forEach(cat => {
+      const values = (s[cat] || "").split(',').map(v => v.trim()).filter(v => v);
+      values.forEach(value => {
+        const key = `${value}-${cat}`;
+        if (!groups[key]) groups[key] = [];
+        groups[key].push(s);
+      });
+    });
+  });
+
+  let maxConnections = 0;
+  for (const key in groups) {
+    if (groups[key].length > maxConnections) {
+      maxConnections = groups[key].length;
+    }
+  }
+
+  const maxClusterX = canvas.width - 100;
+  const clusterY = canvas.height / 2;
+  const numCategories = categoryNodes.length;
+  const spacing = numCategories > 0 ? Math.min(200, (canvas.width - 200) / numCategories) : 200;
+
+  categoryNodes.forEach((catNode, index) => {
+    if (!catNode.initialized) {
+      catNode.x = 100 + index * spacing;
+      catNode.y = clusterY;
+      catNode.vx = 0;
+      catNode.vy = 0;
+      catNode.initialized = true;
+    }
+
+    const group = groups[`${catNode.name}-${catNode.category}`] || [];
+    catNode.connections = group.length;
+    if (maxConnections > 0) {
+      catNode.radius = minCategoryRadius + (maxCategoryRadius - minCategoryRadius) * (catNode.connections / maxConnections);
+    } else {
+      catNode.radius = minCategoryRadius;
+    }
+
+    const groupSpacing = 60;
+    let startX = catNode.x - ((group.length - 1) * groupSpacing) / 2;
+    group.forEach((s, i) => {
+      const angle = Math.random() * 2 * Math.PI;
+      const radius = 80 + Math.random() * 40;
+      s.x = catNode.x + radius * Math.cos(angle);
+      s.y = catNode.y + radius * Math.sin(angle);
+      s.vx = 0;
+      s.vy = 0;
+    });
+  });
+}
+
+// ---------------- Drag & Drop ----------------
+canvas.addEventListener("mousedown", e => {
+  const rect = canvas.getBoundingClientRect();
+  const mx = e.clientX - rect.left;
+  const my = e.clientY - rect.top;
+
+  const allNodes = [...schueler, ...categoryNodes];
+  allNodes.forEach(s => {
+    const dx = mx - s.x;
+    const dy = my - s.y;
+    const nodeRadius = s.type === "category" ? s.radius : radius;
+    if (dx * dx + dy * dy <= nodeRadius * nodeRadius) {
+      draggedNode = s;
+      dragMoved = false;
+    }
+  });
+});
+
+canvas.addEventListener("mousemove", e => {
+  if (draggedNode) {
+    dragMoved = true;
+    const rect = canvas.getBoundingClientRect();
+    draggedNode.x = e.clientX - rect.left;
+    draggedNode.y = e.clientY - rect.top;
+    draggedNode.vx = 0;
+    draggedNode.vy = 0;
+  }
+});
+
+canvas.addEventListener("mouseup", e => {
+  if (!draggedNode) return;
+
+  if (!dragMoved) {
+    if (draggedNode.type === "category") {
+      if (selectedCategoryNode === draggedNode) {
+        selectedCategoryNode = null;
+      } else {
+        selectedCategoryNode = draggedNode;
+        selectedSchuelerNode = null;
+      }
+    } else if (draggedNode.type === "schueler") {
+      if (selectedSchuelerNode === draggedNode) {
+        selectedSchuelerNode = null;
+      } else {
+        selectedSchuelerNode = draggedNode;
+        selectedCategoryNode = null;
+      }
+    }
+    draw();
+  }
+
+  draggedNode = null;
+});
+
+canvas.addEventListener("mouseleave", () => { draggedNode = null; });
+
+// ---------------- Touch Support ----------------
+function getTouchPos(touch) {
+  const rect = canvas.getBoundingClientRect();
+  return {
+    x: touch.clientX - rect.left,
+    y: touch.clientY - rect.top
+  };
+}
+
+let touchStartNode = null;
+let touchMoved = false;
+
+canvas.addEventListener("touchstart", e => {
+  const touch = e.touches[0];
+  const pos = getTouchPos(touch);
+  const allNodes = [...schueler, ...categoryNodes];
+
+  let hitNode = null;
+  allNodes.forEach(s => {
+    const dx = pos.x - s.x;
+    const dy = pos.y - s.y;
+    const nodeRadius = s.type === "category" ? s.radius : radius;
+    if (dx * dx + dy * dy <= nodeRadius * nodeRadius) hitNode = s;
+  });
+
+  if (hitNode) {
+    draggedNode = hitNode;
+    touchStartNode = hitNode;
+    touchMoved = false;
+    e.preventDefault();
+  }
+});
+
+canvas.addEventListener("touchmove", e => {
+  if (draggedNode) {
+    e.preventDefault();
+    const touch = e.touches[0];
+    const pos = getTouchPos(touch);
+    draggedNode.x = pos.x;
+    draggedNode.y = pos.y;
+    draggedNode.vx = 0;
+    draggedNode.vy = 0;
+    touchMoved = true;
+  }
+});
+
+canvas.addEventListener("touchend", e => {
+  if (touchStartNode && !touchMoved) {
+    if (touchStartNode.type === "category") {
+      if (selectedCategoryNode === touchStartNode) {
+        selectedCategoryNode = null;
+      } else {
+        selectedCategoryNode = touchStartNode;
+        selectedSchuelerNode = null;
+      }
+    } else if (touchStartNode.type === "schueler") {
+      if (selectedSchuelerNode === touchStartNode) {
+        selectedSchuelerNode = null;
+      } else {
+        selectedSchuelerNode = touchStartNode;
+        selectedCategoryNode = null;
+      }
+    }
+    draw();
+  }
+
+  draggedNode = null;
+  touchStartNode = null;
+  touchMoved = false;
+});
+
+canvas.addEventListener("touchcancel", () => {
+  draggedNode = null;
+  touchStartNode = null;
+  touchMoved = false;
+});
+
+// ---------------- Filter Event ----------------
+filterSelect.addEventListener("change", e => {
+  currentFilter = e.target.value;
+  selectedCategoryNode = null;
+  selectedSchuelerNode = null;
+  clusterPositions();
+  draw();
+});
+
+// ---------------- Animation Loop ----------------
+function animate() {
+  const allNodes = [...schueler, ...categoryNodes];
+  applyForces(allNodes);
+  draw();
+  requestAnimationFrame(animate);
+}
+
+animate();
+
+// ---------------- Namensliste ----------------
+function buildNameListHTML() {
+  const listDiv = document.getElementById("list_names");
+  listDiv.innerHTML = "";
+
+  schueler.forEach(s => {
+    const item = document.createElement("div");
+    item.innerHTML = s.name;
+
+    item.addEventListener("click", () => {
+      if (selectedSchuelerNode === s) {
+        selectedSchuelerNode = null;
+      } else {
+        selectedSchuelerNode = s;
+        selectedCategoryNode = null;
+      }
+      draw();
+    });
+
+    listDiv.appendChild(item);
+  });
+}
+buildNameListHTML();
+</script>
