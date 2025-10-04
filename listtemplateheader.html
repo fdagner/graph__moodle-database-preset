@@ -16,21 +16,19 @@
     }
 </script>
 <div  id="fullscreen_graph" style="aspect-ratio: 4/3;"><h2 class="graph-title">Graph</h2>
- <div class="graph-filter"> <button type="button" class="btn btn-light toggle-fullscreen-btn" onclick="togglePresentationMode()" title="Präsentationsmodus"><i
-                        class="fa-solid fa-person-chalkboard"></i></button>
+<div class="graph-filter">
   <select id="filter">
     <option value="alle">Alle</option>
-  </select>
+  </select><button id="toggleList" type="button" class="btn btn-light"><i class="fa-solid fa-eye"></i></button> <button type="button" class="btn btn-light toggle-fullscreen-btn" onclick="togglePresentationMode()" title="Präsentationsmodus"><i
+                        class="fa-solid fa-person-chalkboard"></i></button>
 
+<div id="list_names" style="display: none; margin-top: 10px;"></div>
 </div> 
 
 <div class="graph-container" style="overflow: auto;min-width: 800px">
   <canvas id="graph"></canvas>
 </div>
-<details><summary>Einträge</summary>
-<div id="list_names"></div>
-</details>
 </div>
 
-<script>
-const schueler = [
+
+<ul id="userPlaceholders" style="display:none"> 

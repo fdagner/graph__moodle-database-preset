@@ -1,4 +1,28 @@
-];
+</ul>
+<script>
+const schueler = [];
+let currentStudent = {};
+
+document.querySelectorAll("#userPlaceholders li").forEach((li, index, arr) => {
+  const text = li.innerHTML.trim(); // <--- hier innerHTML, nicht textContent
+  const parts = text.split(',').map(p => p.trim());
+
+  if (parts.length < 2) return;
+
+  const key = parts[0];                 
+  const value = parts.slice(1).join(', '); // alles nach dem ersten Komma
+
+  currentStudent[key] = value; // HTML bleibt intakt
+
+  // Prüfen, ob nächster li ein neuer Schüler ist oder Ende
+  const nextLi = arr[index + 1];
+  if (!nextLi || nextLi.innerHTML.trim().startsWith("name,")) {
+    schueler.push(currentStudent);
+    currentStudent = {};
+  }
+});
+
+console.log(schueler);
 // ---------------- Canvas Setup ----------------
 const canvas = document.getElementById("graph");
 const ctx = canvas.getContext("2d");
@@ -145,7 +169,7 @@ function getDynamicPhysicsParameters(numNodes, canvasWidth, canvasHeight) {
   const nodeScale = Math.sqrt(numNodes / referenceNodes);
 
   return {
-    springLength: 150 * areaScale * (nodeScale > 1 ? Math.min(nodeScale, 1.5) : 1),
+    springLength: 50 * areaScale * (nodeScale > 1 ? Math.min(nodeScale, 1.5) : 1),
     springStrength: 0.005 / (nodeScale > 1 ? nodeScale : 1),
     repulsion: 50 * nodeScale * areaScale,
     damping: Math.min(0.7 + 0.1 * (nodeScale - 1), 0.9)
@@ -161,19 +185,26 @@ function applyForces(nodes) {
   );
 
   for (let i = 0; i < nodes.length; i++) {
-    for (let j = i + 1; j < nodes.length; j++) {
-      let dx = nodes[j].x - nodes[i].x;
-      let dy = nodes[j].y - nodes[i].y;
-      let dist = Math.sqrt(dx * dx + dy * dy) || 0.01;
-      let force = repulsion / (dist * dist);
-      let fx = force * dx / dist;
-      let fy = force * dy / dist;
-      nodes[i].vx -= fx;
-      nodes[i].vy -= fy;
-      nodes[j].vx += fx;
-      nodes[j].vy += fy;
+  for (let j = i + 1; j < nodes.length; j++) {
+    let dx = nodes[j].x - nodes[i].x;
+    let dy = nodes[j].y - nodes[i].y;
+    let dist = Math.sqrt(dx * dx + dy * dy) || 0.01;
+
+    // Kategorie-Knoten stoßen sich stärker ab
+    let nodeRepulsion = repulsion;
+    if (nodes[i].type === "category" || nodes[j].type === "category") {
+      nodeRepulsion *= 7; // Faktor je nach gewünschtem Abstand
     }
+
+    let force = nodeRepulsion / (dist * dist);
+    let fx = force * dx / dist;
+    let fy = force * dy / dist;
+    nodes[i].vx -= fx;
+    nodes[i].vy -= fy;
+    nodes[j].vx += fx;
+    nodes[j].vy += fy;
   }
+}
 
   const edges = createEdges(currentFilter, nodes);
   edges.forEach(e => {
@@ -349,7 +380,7 @@ function clusterPositions() {
   const maxClusterX = canvas.width - 100;
   const clusterY = canvas.height / 2;
   const numCategories = categoryNodes.length;
-  const spacing = numCategories > 0 ? Math.min(200, (canvas.width - 200) / numCategories) : 200;
+  const spacing = numCategories > 0 ? Math.min(400, (canvas.width - 200) / numCategories) : 200;
 
   categoryNodes.forEach((catNode, index) => {
     if (!catNode.initialized) {
@@ -540,9 +571,33 @@ function buildNameListHTML() {
 
   schueler.forEach(s => {
     const item = document.createElement("div");
-    item.innerHTML = s.name;
+    item.style.display = "flex";        // für saubere Anordnung
+    item.style.alignItems = "center";   // vertikal zentriert
+    item.style.gap = "2px";             // Abstand zwischen Button und Name
+    item.style.border = "1px dashed #000";
 
-    item.addEventListener("click", () => {
+    // Zusätzlicher Button mit Font Awesome Icon
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.classList.add("btn", "button");
+    btn.innerHTML = '<i class="fa-solid fa-diagram-project"></i>'; 
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation(); // verhindert Klick auf das Eltern-div
+  if (selectedSchuelerNode === s) {
+    selectedSchuelerNode = null;      // Auswahl zurücksetzen
+    selectedCategoryNode = null;      // ggf. Kategorie auch zurücksetzen
+  } else {
+    selectedSchuelerNode = s;         // Schüler auswählen
+    selectedCategoryNode = null;      // Kategorie zurücksetzen
+  }
+
+    });
+
+    // Name / HTML-Link
+    const nameSpan = document.createElement("span");
+    nameSpan.innerHTML = s.name;
+    nameSpan.style.cursor = "pointer"; // optisch klickbar
+    nameSpan.addEventListener("click", () => {
       if (selectedSchuelerNode === s) {
         selectedSchuelerNode = null;
       } else {
@@ -552,8 +607,24 @@ function buildNameListHTML() {
       draw();
     });
 
+    // Button zuerst, dann Name
+    item.appendChild(btn);
+    item.appendChild(nameSpan);
+
     listDiv.appendChild(item);
   });
 }
+const toggleBtn = document.getElementById("toggleList");
+const listDiv = document.getElementById("list_names");
+
+toggleBtn.addEventListener("click", () => {
+  if (listDiv.style.display === "none") {
+    listDiv.style.display = "flex";
+    toggleBtn.innerHTML = '<i class="fa-solid fa-eye-slash"></i>';
+  } else {
+    listDiv.style.display = "none";
+    toggleBtn.innerHTML = '<i class="fa-solid fa-eye"></i>';
+  }
+});
 buildNameListHTML();
 </script>

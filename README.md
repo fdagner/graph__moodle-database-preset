@@ -35,19 +35,15 @@ Create a "Database" activity in Moodle and then upload the ZIP file.
 3. Customize the list template:
 
 ```
-{
-name: '##user## ##edit## ##delete##',
-Länder: '[[state]]',
-},
+<li>name, ##user## ##edit## ##delete##</li>
+<li>Land, [[state]]</li>
 ```
 <b>Important: The main category must be named 'name'.</b>
 
 You can also do it this way:
 ```
-{
-name: '[[name]] ##edit## ##delete##',
-Länder: '[[state]]',
-},
+<li>name, [[name]] ##edit## ##delete##</li>
+<li>Land, [[state]]</li>
 ```
 
 ## Language Support

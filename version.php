@@ -23,6 +23,6 @@
 
 defined('MOODLE_INTERNAL') || die();
 
-$plugin->version   = 2025100100;        // The current plugin version (Date: YYYYMMDDXX).
+$plugin->version   = 2025100400;        // The current plugin version (Date: YYYYMMDDXX).
 $plugin->requires  = 2025010100;        // Requires this Moodle version.
 $plugin->component = 'datapreset_graph'; // Full name of the plugin (used for diagnostics)
